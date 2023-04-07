@@ -1,9 +1,12 @@
 mod lines;
 mod scraper;
-use crate::lines::structs::*;
+mod sms_interaction;
 use crate::scraper::*;
+use crate::sms_interaction::twilio_interface;
+use tokio;
 
-fn main() {
+#[tokio::main]
+async fn main() {
     // Basic idea:
     // store a small local database of users, who each have a list
     // of associated lines and time for a message,
@@ -17,6 +20,7 @@ fn main() {
     // 1) webscraper for the tfl website. I assume that this will be the most brittle
     // part.
     // The classes are well delimited.
+
     // 2) User database, write and read users.
     //  rough schema
     //  users: a, b ,c
@@ -27,11 +31,12 @@ fn main() {
     // 3) Interface with messenger, and request handeling.
     //
     //
-    let lizzy_line = Line::ElizabethLine;
-    let lizzy_day = TubeLine {
-        name: lizzy_line,
-        status_message: "dave",
-    };
-    println!("TFL updates are coming");
-    scrape::scrape().unwrap();
+    twilio_interface::send_test().await;
+    twilio_interface::twilio_rust().await;
+    println!("Done");
+}
+
+#[test]
+fn test() {
+    assert!(true)
 }
