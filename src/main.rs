@@ -1,8 +1,7 @@
 mod lines;
-mod scraper;
 mod sms_interaction;
-use crate::scraper::*;
-use crate::sms_interaction::twilio_interface;
+mod tfl_status;
+use sms_interaction::twilio_interface;
 use tokio;
 
 #[tokio::main]
@@ -31,12 +30,6 @@ async fn main() {
     // 3) Interface with messenger, and request handeling.
     //
     //
-    twilio_interface::send_test().await;
-    twilio_interface::twilio_rust().await;
-    println!("Done");
-}
-
-#[test]
-fn test() {
-    assert!(true)
+    let angie = "+447478670019";
+    twilio_interface::send_message(angie, "Hi Angie, sean here").await;
 }
