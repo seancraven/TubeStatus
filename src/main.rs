@@ -1,8 +1,9 @@
-mod lines;
 mod sms_interaction;
 mod tfl_status;
+mod tube;
 use sms_interaction::twilio_interface;
 use tokio;
+use tube::{Line, Lines};
 
 #[tokio::main]
 async fn main() {
@@ -30,6 +31,18 @@ async fn main() {
     // 3) Interface with messenger, and request handeling.
     //
     //
+    // TODO: Debug this.
     let angie = "+447478670019";
-    twilio_interface::send_message(angie, "Hi Angie, sean here").await;
+    let mut lines = Lines::new();
+    let jubilee = Line::Jubilee;
+    lines.update().await;
+    let jubilee_status = lines
+        .get(&jubilee)
+        .expect("Expected to get info about jubilee");
+
+    let message_body = format!(
+        "Hi Angie, a short summary of jubilee service {:?}",
+        jubilee_status.short,
+    );
+    let message = twilio_interface::send_message(angie, &message_body).await;
 }
