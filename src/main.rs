@@ -1,12 +1,12 @@
-mod sms_interaction;
+mod sms;
 mod tfl_status;
 mod tube;
-use sms_interaction::twilio_interface;
+
 use tokio;
 use tube::{Line, Lines};
 
-#[tokio::main]
-async fn main() {
+fn main() {
+    // fn main() {
     // Basic idea:
     // store a small local database of users, who each have a list
     // of associated lines and time for a message,
@@ -31,18 +31,16 @@ async fn main() {
     // 3) Interface with messenger, and request handeling.
     //
     //
-    // TODO: Debug this.
-    let angie = "+447478670019";
+    let sean = "+447704179714";
     let mut lines = Lines::new();
     let jubilee = Line::Jubilee;
-    lines.update().await;
+    lines.update();
     let jubilee_status = lines
         .get(&jubilee)
         .expect("Expected to get info about jubilee");
-
-    let message_body = format!(
-        "Hi Angie, a short summary of jubilee service {:?}",
-        jubilee_status.short,
-    );
-    let message = twilio_interface::send_message(angie, &message_body).await;
+    let message_body = format!("Hi Angie, \n\n{}", jubilee_status,);
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    rt.block_on(sms::message(sean, &message_body))
+        .expect("Failed to send message");
+    println!("Sent message");
 }

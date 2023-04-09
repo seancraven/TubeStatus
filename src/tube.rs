@@ -1,6 +1,7 @@
 use crate::tfl_status;
 use std::collections::hash_map::Iter;
 use std::collections::HashMap;
+use std::fmt;
 use std::hash::Hash;
 
 // What are the constraints, I can obviously iterate through a vec
@@ -12,6 +13,22 @@ pub struct LineStatus {
     pub short: String,
     pub long: Option<String>,
 }
+impl fmt::Display for LineStatus {
+    /// Display the line status in a human readable format.
+    /// Only when there is a delay will the long status be displayed.
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self.long {
+            Some(ref long) => write!(
+                f,
+                "{}:\n\n Short summary: {} \n\n Long summary: {}",
+                self.name.name(),
+                self.short,
+                long
+            ),
+            None => write!(f, "{}:\n\n Short summary: {}", self.name.name(), self.short),
+        }
+    }
+}
 
 /// Struct to contain all tube information that defines the interface.
 pub struct Lines {
@@ -21,9 +38,9 @@ impl Lines {
     /// Scrapes the tfl website for status updates to the tube lines,
     /// Populates the map with this information.
     ///
-    /// The implementaion is slow and simple.
-    pub async fn update(&mut self) {
-        if let Ok(status_vec) = tfl_status::scrape() {
+    /// The implementaion is slow and simple, uses a private hashmap.
+    pub fn update(&mut self) {
+        if let Ok(status_vec) = tfl_status::fetch() {
             for line_status in status_vec.iter() {
                 self.map.insert(line_status.name, line_status.clone());
             }
