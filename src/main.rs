@@ -1,11 +1,10 @@
+mod database;
 mod sms;
 mod tfl_status;
 mod tube;
 
-use tokio;
-use tube::{Line, Lines};
-
-fn main() {
+#[tokio::main]
+async fn main() {
     // fn main() {
     // Basic idea:
     // store a small local database of users, who each have a list
@@ -31,16 +30,27 @@ fn main() {
     // 3) Interface with messenger, and request handeling.
     //
     //
-    let sean = "+447704179714";
-    let mut lines = Lines::new();
-    let jubilee = Line::Jubilee;
-    lines.update();
-    let jubilee_status = lines
-        .get(&jubilee)
-        .expect("Expected to get info about jubilee");
-    let message_body = format!("Hi Angie, \n\n{}", jubilee_status,);
-    let rt = tokio::runtime::Runtime::new().unwrap();
-    rt.block_on(sms::message(sean, &message_body))
-        .expect("Failed to send message");
-    println!("Sent message");
+}
+#[cfg(test)]
+mod test {
+    use crate::sms;
+    use crate::tube::{Line, Lines};
+    use dotenv::dotenv;
+    #[test]
+    fn message_test() {
+        dotenv().ok();
+        let recipient = std::env::var("PHONE_TO").expect("Expected to get recipient env var");
+        let mut lines = Lines::new();
+        let jubilee = Line::Jubilee;
+        lines.update();
+        let jubilee_status = lines
+            .get(&jubilee)
+            .expect("Expected to get info about jubilee");
+        let message_body = format!("Hi Person, \n\n{}", jubilee_status,);
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        rt.block_on(sms::message(&recipient, &message_body))
+            .expect("Failed to send message");
+        println!("Sent message");
+        assert!(true);
+    }
 }
