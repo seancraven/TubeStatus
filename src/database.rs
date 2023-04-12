@@ -1,60 +1,143 @@
-// Rough idea of interaction.
-// A person defines
-//  1 - Which days they want updates.
-//  2 - What times they want updates.
-//  3 - Which Line/lines they wish to be updated on.
-//To do this, they must have:
-// - A unique ID.
-// - A list of days they want updates.
-// - A list of times they want updates.
-// - A list of lines they want updates on.
-// - A number to send the updates to.
 use chrono::naive::NaiveTime;
-use sqlx::mysql::{MySqlDatabaseError, MySqlPool, MySqlQueryResult};
-use std::env;
-
-// Quick idea use the user as a struct as they are the fk for the days.
-//
-//
-// Days and Lines are subtables of the User, they could be in the same
-// tabel, but they feel disconnected enough that seperating them out
-// makes sense in my head.
+use sqlx::mysql::{MySqlPool, MySqlQueryResult};
+// TODO, fix the add user tabel,
+// TODO, fix the get user tabel,
+// TODO, restructure the database so that the user tabel's pk is
+// the phone number, use this as the fk in the other tabels.
 #[derive(Debug, PartialEq, Eq)]
 struct UserTabel {
     id: u8,
     name: String,
     phone_number: String,
     update_time: NaiveTime,
+    days: DaysTabel,
+    lines: LinesTabel,
 }
+impl UserTabel {
+    pub fn new(
+        id: u8,
+        name: String,
+        phone_number: String,
+        update_time: NaiveTime,
+        days: impl IntoIterator<Item = bool>,
+        lines: impl IntoIterator<Item = bool>,
+    ) -> Self {
+        let days = DaysTabel::new(days).unwrap();
+        let lines = LinesTabel::new(lines).unwrap();
+        UserTabel {
+            id,
+            name,
+            phone_number,
+            update_time,
+            days,
+            lines,
+        }
+    }
+}
+#[derive(Debug, PartialEq, Eq)]
+enum CreateDaysError {
+    IncorrectDayCount,
+    InvalidDay,
+}
+#[derive(Debug, PartialEq, Eq)]
 struct DaysTabel {
-    user: UserTabel,
-    mon: bool,
-    tue: bool,
-    wed: bool,
-    thu: bool,
-    fri: bool,
-    sat: bool,
-    sun: bool,
+    days: Vec<bool>,
 }
+impl DaysTabel {
+    pub fn new(iterable: impl IntoIterator<Item = bool>) -> Result<Self, CreateDaysError> {
+        let mut days = Vec::with_capacity(7);
+        for day in iterable.into_iter() {
+            days.push(day);
+        }
+        if days.len() != 7 {
+            return Err(CreateDaysError::IncorrectDayCount);
+        }
+        return Ok(DaysTabel { days });
+    }
+    pub fn from_strs<'a>(
+        iterable: impl IntoIterator<Item = &'a str>,
+    ) -> Result<Self, CreateDaysError> {
+        let mut days = vec![false; 7];
+        for day in iterable.into_iter() {
+            match day {
+                "monday" => days[0] = true,
+                "tuesday" => days[1] = true,
+                "wednesday" => days[2] = true,
+                "thursday" => days[3] = true,
+                "friday" => days[4] = true,
+                "saturday" => days[5] = true,
+                "sunday" => days[6] = true,
+                _ => return Err(CreateDaysError::InvalidDay),
+            }
+        }
+        return Ok(DaysTabel { days });
+    }
+}
+
 /// Struct to match the database tabel, for ease
 /// of use.
+#[derive(Debug, PartialEq, Eq)]
 struct LinesTabel {
-    user: UserTabel,
-    elizabeth: bool,
-    jubilee: bool,
-    bakerloo: bool,
-    central: bool,
-    circle: bool,
-    district: bool,
-    dlr: bool,
-    hammersmith: bool,
-    metropolitan: bool,
-    northern: bool,
-    piccadilly: bool,
-    victoria: bool,
-    waterloo: bool,
-    overground: bool,
-    tram: bool,
+    lines: Vec<bool>,
+    // elizabeth: bool,
+    // jubilee: bool,
+    // bakerloo: bool,
+    // central: bool,
+    // circle: bool,
+    // district: bool,
+    // dlr: bool,
+    // hammersmith: bool,
+    // metropolitan: bool,
+    // northern: bool,
+    // piccadilly: bool,
+    // victoria: bool,
+    // waterloo: bool,
+    // overground: bool,
+    // tram: bool,
+}
+#[derive(Debug, PartialEq, Eq)]
+enum CreateLinesError {
+    IncorrectLineCount,
+    InvalidLine,
+}
+impl LinesTabel {
+    pub fn new(iterable: impl IntoIterator<Item = bool>) -> Result<Self, CreateLinesError> {
+        let mut lines = Vec::with_capacity(15);
+        for line in iterable.into_iter() {
+            lines.push(line);
+        }
+        if lines.len() != 15 {
+            return Err(CreateLinesError::IncorrectLineCount);
+        }
+        return Ok(LinesTabel { lines });
+    }
+    pub fn from_strs<'a>(
+        iterable: impl IntoIterator<Item = &'a str>,
+    ) -> Result<Self, CreateLinesError> {
+        let mut lines = vec![false; 15];
+
+        for line in iterable.into_iter() {
+            match line {
+                "elizabeth" => lines[0] = true,
+                "jubilee" => lines[1] = true,
+                "bakerloo" => lines[2] = true,
+                "central" => lines[3] = true,
+                "circle" => lines[4] = true,
+                "district" => lines[5] = true,
+                "dlr" => lines[6] = true,
+                "hammersmith" => lines[7] = true,
+                "metropolitan" => lines[8] = true,
+                "northern" => lines[9] = true,
+                "piccadilly" => lines[10] = true,
+                "victoria" => lines[11] = true,
+                "waterloo" => lines[12] = true,
+                "overground" => lines[13] = true,
+                "tram" => lines[14] = true,
+                _ => return Err(CreateLinesError::InvalidLine),
+            }
+        }
+        return Ok(LinesTabel { lines });
+    }
 }
 /// Make the tabels if they don't exist.
 async fn create_tabels(conn: &MySqlPool) {
@@ -167,12 +250,13 @@ async fn get_user(pool: &MySqlPool, number: &String) -> Result<UserTabel, sqlx::
     )
     .fetch_one(pool)
     .await?;
-    Ok(UserTabel {
-        id: user.id as u8,
-        name: user.name,
-        phone_number: user.phone_number,
-        update_time: user.update_time,
-    })
+    todo!();
+    // Ok(UserTabel {
+    //     id: user.id as u8,
+    //     name: user.name,
+    //     phone_number: user.phone_number,
+    //     update_time: user.update_time,
+    // })
 }
 
 #[cfg(test)]
@@ -204,6 +288,12 @@ mod test {
             name: "Test".to_string(),
             phone_number: "123456789".to_string(),
             update_time: NaiveTime::from_hms_opt(12, 0, 0).unwrap(),
+            days: DaysTabel {
+                days: vec![false; 7],
+            },
+            lines: LinesTabel {
+                lines: vec![false; 15],
+            },
         };
         sqlx::query!("DELETE FROM users WHERE name='Test';")
             .execute(&pool)
@@ -225,6 +315,12 @@ mod test {
             name: "Test".to_string(),
             phone_number: "123456789".to_string(),
             update_time: NaiveTime::from_hms_opt(12, 0, 0).unwrap(),
+            days: DaysTabel {
+                days: vec![false; 7],
+            },
+            lines: LinesTabel {
+                lines: vec![false; 15],
+            },
         };
         sqlx::query!("DELETE FROM users WHERE name='Test';")
             .execute(&pool)
