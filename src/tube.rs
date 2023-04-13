@@ -101,35 +101,36 @@ impl Line {
         }
     }
     pub fn build_from_str(name: &str) -> Option<Line> {
-        if name.contains("Elizabeth") {
+        let name = name.to_string().to_lowercase();
+        if name.contains("elizabeth") {
             Some(Line::ElizabethLine)
-        } else if name.contains("Jubilee") {
+        } else if name.contains("jubilee") {
             Some(Line::Jubilee)
-        } else if name.contains("Tram") {
+        } else if name.contains("tram") {
             Some(Line::Tram)
-        } else if name.contains("Bakerloo") {
+        } else if name.contains("bakerloo") {
             Some(Line::Bakerloo)
-        } else if name.contains("Central") {
+        } else if name.contains("central") {
             Some(Line::Central)
-        } else if name.contains("District") {
+        } else if name.contains("district") {
             Some(Line::District)
-        } else if name.contains("Hammersmith") {
+        } else if name.contains("hammersmith") {
             Some(Line::HammersmithCity)
-        } else if name.contains("Metropolitan") {
+        } else if name.contains("metropolitan") {
             Some(Line::Metropolitan)
-        } else if name.contains("Northern") {
+        } else if name.contains("northern") {
             Some(Line::Northern)
-        } else if name.contains("Piccadilly") {
+        } else if name.contains("piccadilly") {
             Some(Line::Piccadilly)
-        } else if name.contains("Victoria") {
+        } else if name.contains("victoria") {
             Some(Line::Victoria)
-        } else if name.contains("Waterloo") {
+        } else if name.contains("waterloo") {
             Some(Line::WaterlooCity)
-        } else if name.contains("Overground") {
+        } else if name.contains("overground") {
             Some(Line::LondonOverground)
-        } else if name.contains("DLR") {
+        } else if name.contains("dlr") {
             Some(Line::DLR)
-        } else if name.contains("Circle") {
+        } else if name.contains("circle") {
             Some(Line::Circle)
         } else {
             None
