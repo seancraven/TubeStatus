@@ -1,7 +1,5 @@
 use chrono::naive::NaiveTime;
 use sqlx::mysql::{MySqlPool, MySqlQueryResult};
-// TODO, fix the add user tabel,
-// TODO, fix the get user tabel,
 // TODO, restructure the database so that the user tabel's pk is
 // the phone number, use this as the fk in the other tabels.
 #[derive(Debug, PartialEq, Eq)]
@@ -79,20 +77,6 @@ impl DaysTabel {
 #[derive(Debug, PartialEq, Eq)]
 struct LinesTabel {
     lines: Vec<bool>,
-    // elizabeth: bool,
-    // jubilee: bool,
-    // bakerloo: bool,
-    // central: bool,
-    // circle: bool,
-    // district: bool,
-    // dlr: bool,
-    // hammersmith: bool,
-    // metropolitan: bool,
-    // northern: bool,
-    // piccadilly: bool,
-    // victoria: bool,
-    // waterloo: bool,
-    // overground: bool,
     // tram: bool,
 }
 #[derive(Debug, PartialEq, Eq)]
@@ -116,6 +100,7 @@ impl LinesTabel {
     ) -> Result<Self, CreateLinesError> {
         let mut lines = vec![false; 15];
 
+        // This feels really bad, honenestly.
         for line in iterable.into_iter() {
             match line {
                 "elizabeth" => lines[0] = true,
@@ -144,11 +129,10 @@ async fn create_tabels(conn: &MySqlPool) {
     let users = sqlx::query!(
         r#"
         CREATE TABLE IF NOT EXISTS users (
-            id SMALLINT NOT NULL AUTO_INCREMENT,
             name VARCHAR(20) NOT NULL,
-            phone_number VARCHAR(255) NOT NULL UNIQUE,
+            phone_number VARCHAR(20) NOT NULL UNIQUE,
             update_time TIME NOT NULL,
-            CONSTRAINT pk_user PRIMARY KEY (id)
+            CONSTRAINT pk_user PRIMARY KEY (phone_number)
         )
         "#,
     )
@@ -157,7 +141,7 @@ async fn create_tabels(conn: &MySqlPool) {
     let days = sqlx::query!(
         r#"
         CREATE TABLE IF NOT EXISTS days (
-            id SMALLINT NOT NULL AUTO_INCREMENT,
+            phone_number VARCHAR(20) NOT NULL,
             mon BOOLEAN NOT NULL,
             tue BOOLEAN NOT NULL,
             wed BOOLEAN NOT NULL,
@@ -165,7 +149,7 @@ async fn create_tabels(conn: &MySqlPool) {
             fri BOOLEAN NOT NULL,
             sat BOOLEAN NOT NULL,
             sun BOOLEAN NOT NULL,
-            CONSTRAINT fk_days FOREIGN KEY (id) REFERENCES users(id)
+            CONSTRAINT fk_days FOREIGN KEY (phone_number) REFERENCES users(phone_number)
         )
         "#,
     )
@@ -174,7 +158,7 @@ async fn create_tabels(conn: &MySqlPool) {
     let lines = sqlx::query!(
         r#"
         CREATE TABLE IF NOT EXISTS tube_lines (
-            id SMALLINT NOT NULL AUTO_INCREMENT,
+            phone_number VARCHAR(20) NOT NULL,
             elizabeth BOOLEAN NOT NULL,
             jubilee BOOLEAN NOT NULL,
             bakerloo BOOLEAN NOT NULL,
@@ -190,7 +174,7 @@ async fn create_tabels(conn: &MySqlPool) {
             waterloo BOOLEAN NOT NULL,
             overground BOOLEAN NOT NULL,
             tram BOOLEAN NOT NULL,
-            CONSTRAINT fk_lines FOREIGN KEY (id) REFERENCES users(id)
+            CONSTRAINT fk_lines FOREIGN KEY (phone_number) REFERENCES users(phone_number)
         )
         "#,
     )
@@ -203,11 +187,8 @@ async fn create_tabels(conn: &MySqlPool) {
 }
 
 ///  Add a user to the database.
-async fn add_user(
-    pool: &MySqlPool,
-    user_tabel: &UserTabel,
-) -> Result<MySqlQueryResult, sqlx::Error> {
-    sqlx::query!(
+async fn add_user(pool: &MySqlPool, user_tabel: &UserTabel) -> Result<(), sqlx::Error> {
+    let user_query = sqlx::query!(
         r#"
         INSERT INTO users (name, phone_number, update_time)
         VALUES (?, ?, ?)
@@ -216,8 +197,51 @@ async fn add_user(
         user_tabel.phone_number,
         user_tabel.update_time
     )
-    .execute(pool)
-    .await
+    .execute(pool);
+    let lines_query = sqlx::query!(
+        r#"
+        INSERT INTO tube_lines (phone_number, elizabeth, jubilee, bakerloo, central, circle, district, dlr, hammersmith, metropolitan, northern, piccadilly, victoria, waterloo, overground, tram)
+        VALUES (?, ? ,? ,? ,? ,? ,? ,? ,? ,? ,? ,? ,? ,? ,? ,? )
+        "#,
+        user_tabel.phone_number,
+        user_tabel.lines.lines[0],
+        user_tabel.lines.lines[1],
+        user_tabel.lines.lines[2],
+        user_tabel.lines.lines[3],
+        user_tabel.lines.lines[4],
+        user_tabel.lines.lines[5],
+        user_tabel.lines.lines[6],
+        user_tabel.lines.lines[7],
+        user_tabel.lines.lines[8],
+        user_tabel.lines.lines[9],
+        user_tabel.lines.lines[10],
+        user_tabel.lines.lines[11],
+        user_tabel.lines.lines[12],
+        user_tabel.lines.lines[13],
+        user_tabel.lines.lines[14],
+    )
+    .execute(pool);
+
+    let days_query = sqlx::query!(
+        r#"
+        INSERT INTO days (phone_number, mon, tue, wed, thu, fri, sat, sun)
+        VALUES (?, ? ,? ,? ,? ,? ,? ,? )
+        "#,
+        user_tabel.phone_number,
+        user_tabel.days.days[0],
+        user_tabel.days.days[1],
+        user_tabel.days.days[2],
+        user_tabel.days.days[3],
+        user_tabel.days.days[4],
+        user_tabel.days.days[5],
+        user_tabel.days.days[6],
+    )
+    .execute(pool);
+    let (user_r, lines_r, days_r) = tokio::join!(user_query, lines_query, days_query);
+    user_r?;
+    lines_r?;
+    days_r?;
+    Ok(())
 }
 /// Get a user from the database, via their phone number, this
 /// is the natural key for the user.
@@ -242,21 +266,24 @@ async fn add_user(
 ///
 ///
 async fn get_user(pool: &MySqlPool, number: &String) -> Result<UserTabel, sqlx::Error> {
-    let user = sqlx::query!(
+    todo!();
+    // let user = sqlx::query!(
+    //     r#"
+    //     SELECT * FROM users WHERE phone_number=?;
+    //     "#,
+    //     number
+    // )
+    // .fetch_one(pool)
+    // .await?;
+}
+async fn get_lines_days(pool: &MySqlPool, number: &String) -> Vec<String> {
+    let lines = sqlx::query!(
         r#"
-        SELECT * FROM users WHERE phone_number=?;
-        "#,
+        SELECT * FROM tube_lines WHERE phone_number=?;
+    "#,
         number
     )
-    .fetch_one(pool)
-    .await?;
-    todo!();
-    // Ok(UserTabel {
-    //     id: user.id as u8,
-    //     name: user.name,
-    //     phone_number: user.phone_number,
-    //     update_time: user.update_time,
-    // })
+    .fetch_all(pool);
 }
 
 #[cfg(test)]
@@ -269,23 +296,23 @@ mod test {
     #[tokio::test]
     async fn create_tabels_test() {
         dotenv().ok();
-        let db_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+        let db_url = env::var("DATABASE_URL").expect("database_url must be set");
         let pool = MySqlPool::connect(&db_url)
             .await
-            .expect("Failed to connect to database");
+            .expect("failed to connect to database");
         create_tabels(&pool).await;
         assert!(true);
     }
     #[tokio::test]
     async fn user_add_test() {
         dotenv().ok();
-        let db_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+        let db_url = env::var("database_url").expect("database_url must be set");
         let pool = MySqlPool::connect(&db_url)
             .await
-            .expect("Failed to connect to database");
+            .expect("failed to connect to database");
         let dave = UserTabel {
             id: 0,
-            name: "Test".to_string(),
+            name: "test".to_string(),
             phone_number: "123456789".to_string(),
             update_time: NaiveTime::from_hms_opt(12, 0, 0).unwrap(),
             days: DaysTabel {
@@ -295,24 +322,24 @@ mod test {
                 lines: vec![false; 15],
             },
         };
-        sqlx::query!("DELETE FROM users WHERE name='Test';")
+        sqlx::query!("delete from users where name='test';")
             .execute(&pool)
             .await
-            .expect("Failed to delete test user");
+            .expect("failed to delete test user");
 
-        add_user(&pool, &dave).await.expect("Failed to add user");
+        add_user(&pool, &dave).await.expect("failed to add user");
         assert!(true);
     }
     #[tokio::test]
     async fn add_remove_user_test() {
         dotenv().ok();
-        let db_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+        let db_url = env::var("database_url").expect("database_url must be set");
         let pool = MySqlPool::connect(&db_url)
             .await
-            .expect("Failed to connect to database");
+            .expect("failed to connect to database");
         let dave = UserTabel {
             id: 0,
-            name: "Test".to_string(),
+            name: "test".to_string(),
             phone_number: "123456789".to_string(),
             update_time: NaiveTime::from_hms_opt(12, 0, 0).unwrap(),
             days: DaysTabel {
@@ -322,15 +349,15 @@ mod test {
                 lines: vec![false; 15],
             },
         };
-        sqlx::query!("DELETE FROM users WHERE name='Test';")
+        sqlx::query!("delete from users where name='test';")
             .execute(&pool)
             .await
-            .expect("Failed to delete test user");
+            .expect("failed to delete test user");
 
-        add_user(&pool, &dave).await.expect("Failed to add user");
+        add_user(&pool, &dave).await.expect("failed to add user");
         let user = get_user(&pool, &String::from("123456789"))
             .await
-            .expect("Failed to get user");
+            .expect("failed to get user");
         assert_eq!(user.name, dave.name);
         assert_eq!(user.phone_number, dave.phone_number);
     }
