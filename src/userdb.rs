@@ -1,130 +1,246 @@
+// File to handle interation with the database.
+// The interface is all defined by a recipient.
+// These contain phone number, update time, days and tube lines, to be updated on.
 use crate::tube::Line;
 use chrono::NaiveTime;
 use sqlx::mysql::MySqlPool;
 use std::collections::HashMap;
 
+#[derive(Debug, Eq, PartialEq, Hash, Clone)]
+pub enum Day {
+    Monday,
+    Tuesday,
+    Wednesday,
+    Thursday,
+    Friday,
+    Saturday,
+    Sunday,
+}
+impl Day {
+    fn to_string(&self) -> String {
+        match self {
+            Day::Monday => String::from("Monday"),
+            Day::Tuesday => String::from("Tuesday"),
+            Day::Wednesday => String::from("Wednesday"),
+            Day::Thursday => String::from("Thursday"),
+            Day::Friday => String::from("Friday"),
+            Day::Saturday => String::from("Saturday"),
+            Day::Sunday => String::from("Sunday"),
+        }
+    }
+}
+
 /// A user in the database.
 /// The phone number is the primary key and the fk, for the other info.
 ///
+#[derive(Debug, Eq, PartialEq, Clone)]
 pub struct Recipient {
     user: User,
     days: DaysDB,
     lines: LinesDB,
 }
-pub struct User {
-    phone_number: u64,
+#[derive(Debug, Eq, PartialEq, Clone)]
+struct User {
+    phone_number: String,
     update_time: NaiveTime,
 }
-pub struct DaysDB {
+#[derive(Debug, Eq, PartialEq, Clone)]
+struct DaysDB {
     /// Which days the user wants to be notified about.
     phone_number: String,
-    map: HashMap<String, bool>,
+    map: HashMap<Day, bool>,
 }
-pub struct LinesDB {
+#[derive(Debug, Eq, PartialEq, Clone)]
+struct LinesDB {
     /// Which lines the user wants to be notified about.
     phone_number: String,
     map: HashMap<Line, bool>,
 }
 impl LinesDB {
-    pub fn new(phone_number: String) -> LinesDB {
+    fn new(phone_number: String, lines: Option<impl IntoIterator<Item = Line>>) -> LinesDB {
         let mut map = HashMap::with_capacity(15);
-        map.insert(Line::ElizabethLine, false);
-        map.insert(Line::HammersmithCity, false);
-        map.insert(Line::Jubilee, false);
-        map.insert(Line::Metropolitan, false);
-        map.insert(Line::Bakerloo, false);
-        map.insert(Line::Central, false);
-        map.insert(Line::Circle, false);
-        map.insert(Line::District, false);
-        map.insert(Line::Northern, false);
-        map.insert(Line::Piccadilly, false);
-        map.insert(Line::Victoria, false);
-        map.insert(Line::WaterlooCity, false);
-        map.insert(Line::LondonOverground, false);
-        map.insert(Line::DLR, false);
-        map.insert(Line::Tram, false);
+        match lines {
+            Some(lines) => {
+                for line in lines {
+                    map.insert(line, true);
+                }
+            }
+            None => {}
+        };
+
         LinesDB { phone_number, map }
     }
-    pub fn set_line(&mut self, line: Line, value: bool) {
+    fn set_line(&mut self, line: Line, value: bool) {
         self.map.insert(line, value);
     }
-    pub fn get_line(&self, line: Line) -> bool {
+    fn get_line(&self, line: Line) -> bool {
         self.map.get(&line).unwrap().clone()
     }
-    pub fn get_phone_number(&self) -> String {
+    fn get_phone_number(&self) -> String {
         self.phone_number.clone()
     }
-    pub async fn insert_into_db(&self, pool: &MySqlPool) -> Result<(), sqlx::Error> {
-        let mut query = String::from("INSERT INTO lines (phone_number");
+    async fn insert_into_db(&self, pool: &MySqlPool) -> Result<(), sqlx::Error> {
+        let mut query = String::from("INSERT INTO tube_lines (phone_number");
         let mut values = format!("VALUES ('{}'", self.phone_number);
         for (line, to_update) in self.map.iter() {
             if *to_update {
                 query.push_str(&format!(", {}", line.name()));
-                values.push_str(",TRUE");
+                values.push_str(", TRUE");
                 // This leaves final values with one extra comma
                 // Think this is fine.
+            } else {
+                query.push_str(&format!(", {}", line.name()));
+                values.push_str(", FALSE");
             }
         }
         query.push_str(") ");
         values.push_str(");");
         query.push_str(&values);
-        println!("{}", &query);
         sqlx::query(&query).execute(pool).await?;
+        Ok(())
+    }
+    async fn fetch(phone_number: &String, pool: &MySqlPool) -> Result<LinesDB, sqlx::Error> {
+        let mut lines = HashMap::with_capacity(15);
+        let query = sqlx::query!(
+            r#"SELECT * FROM tube_lines WHERE phone_number = ?"#,
+            phone_number
+        )
+        .fetch_one(pool)
+        .await?;
+        if query.Bakerloo == 1 {
+            lines.insert(Line::Bakerloo, true);
+        }
+        if query.Central == 1 {
+            lines.insert(Line::Central, true);
+        }
+        if query.Circle == 1 {
+            lines.insert(Line::Circle, true);
+        }
+        if query.District == 1 {
+            lines.insert(Line::District, true);
+        }
+        if query.DLR == 1 {
+            lines.insert(Line::DLR, true);
+        }
+        if query.Elizabeth == 1 {
+            lines.insert(Line::ElizabethLine, true);
+        }
+        if query.Hammersmith == 1 {
+            lines.insert(Line::HammersmithCity, true);
+        }
+        if query.Jubilee == 1 {
+            lines.insert(Line::Jubilee, true);
+        }
+        if query.Overground == 1 {
+            lines.insert(Line::LondonOverground, true);
+        }
+        if query.Metropolitan == 1 {
+            lines.insert(Line::Metropolitan, true);
+        }
+        if query.Northern == 1 {
+            lines.insert(Line::Northern, true);
+        }
+        if query.Piccadilly == 1 {
+            lines.insert(Line::Piccadilly, true);
+        }
+        if query.Tram == 1 {
+            lines.insert(Line::Tram, true);
+        }
+        if query.Victoria == 1 {
+            lines.insert(Line::Victoria, true);
+        }
+        return Ok(LinesDB {
+            phone_number: phone_number.clone(),
+            map: lines,
+        });
+    }
+    async fn remove_from_db(&self, pool: &MySqlPool) -> Result<(), sqlx::Error> {
+        sqlx::query!(
+            r#"DELETE FROM tube_lines WHERE phone_number = ?"#,
+            self.phone_number
+        )
+        .execute(pool)
+        .await?;
         Ok(())
     }
 }
 impl DaysDB {
-    pub fn new(phone_number: String) -> DaysDB {
+    fn new(phone_number: String, days: Option<impl IntoIterator<Item = Day>>) -> DaysDB {
         let mut map = HashMap::with_capacity(7);
-        map.insert(String::from("Monday"), false);
-        map.insert(String::from("Tuesday"), false);
-        map.insert(String::from("Wednesday"), false);
-        map.insert(String::from("Thursday"), false);
-        map.insert(String::from("Friday"), false);
-        map.insert(String::from("Saturday"), false);
-        map.insert(String::from("Sunday"), false);
-        DaysDB { phone_number, map }
+        match days {
+            Some(days) => {
+                for day in days {
+                    map.insert(day, true);
+                }
+            }
+            None => {}
+        };
+        return DaysDB { phone_number, map };
     }
-    pub fn set_day(&mut self, day: String, value: bool) {
-        self.map.insert(day, value);
-    }
-    pub fn get_day(&self, day: String) -> bool {
-        self.map.get(&day).unwrap().clone()
-    }
-    pub fn get_phone_number(&self) -> String {
-        self.phone_number.clone()
-    }
-    pub async fn insert_into_db(&self, pool: &MySqlPool) -> Result<(), sqlx::Error> {
+    async fn insert_into_db(&self, pool: &MySqlPool) -> Result<(), sqlx::Error> {
         let mut query = String::from("INSERT INTO days (phone_number");
         let mut values = format!("VALUES ('{}'", self.phone_number);
         for (day, to_update) in self.map.iter() {
             if *to_update {
-                query.push_str(&format!(",{}", day));
+                query.push_str(&format!(",{}", day.to_string()));
                 values.push_str(", TRUE ");
+            } else {
+                query.push_str(&format!(",{}", day.to_string()));
+                values.push_str(", FALSE ");
             }
         }
         query.push_str(") ");
         values.push_str(");");
         query.push_str(&values);
-        println!("Query {}", &query);
         sqlx::query(&query).execute(pool).await?;
+        Ok(())
+    }
+    pub async fn fetch(phone_number: &String, pool: &MySqlPool) -> Result<DaysDB, sqlx::Error> {
+        let mut days = HashMap::with_capacity(7);
+        let db_query = sqlx::query!("SELECT * FROM days WHERE phone_number = ?", phone_number)
+            .fetch_one(pool)
+            .await?;
+        if db_query.Monday == 1 {
+            days.insert(Day::Monday, true);
+        }
+        if db_query.Tuesday == 1 {
+            days.insert(Day::Tuesday, true);
+        }
+        if db_query.Wednesday == 1 {
+            days.insert(Day::Wednesday, true);
+        }
+        if db_query.Thursday == 1 {
+            days.insert(Day::Thursday, true);
+        }
+        if db_query.Friday == 1 {
+            days.insert(Day::Friday, true);
+        }
+        if db_query.Saturday == 1 {
+            days.insert(Day::Saturday, true);
+        }
+        if db_query.Sunday == 1 {
+            days.insert(Day::Sunday, true);
+        }
+        return Ok(DaysDB {
+            phone_number: phone_number.clone(),
+            map: days,
+        });
+    }
+    async fn remove_from_db(&self, pool: &MySqlPool) -> Result<(), sqlx::Error> {
+        sqlx::query!("DELETE FROM days WHERE phone_number = ?", self.phone_number)
+            .execute(pool)
+            .await?;
         Ok(())
     }
 }
 impl User {
-    pub fn new(phone_number: String, update_time: NaiveTime) -> User {
+    fn new(phone_number: String, update_time: NaiveTime) -> User {
         User {
             phone_number,
             update_time,
         }
     }
-    pub fn get_phone_number(&self) -> String {
-        self.phone_number.clone()
-    }
-    pub fn get_update_time(&self) -> NaiveTime {
-        self.update_time.clone()
-    }
-    pub async fn insert_into_db(&self, pool: &MySqlPool) -> Result<(), sqlx::Error> {
+    async fn insert_into_db(&self, pool: &MySqlPool) -> Result<(), sqlx::Error> {
         sqlx::query!(
             "INSERT INTO users (phone_number, update_time) VALUES (?, ?)",
             self.phone_number,
@@ -134,18 +250,43 @@ impl User {
         .await?;
         Ok(())
     }
+    async fn fetch(phone_number: String, pool: &MySqlPool) -> Result<User, sqlx::Error> {
+        let time = sqlx::query!(
+            "SELECT update_time FROM users WHERE phone_number = ?",
+            phone_number
+        )
+        .fetch_one(pool)
+        .await?;
+        return Ok(User {
+            phone_number: phone_number.clone(),
+            update_time: time.update_time,
+        });
+    }
+    async fn remove_from_db(&self, pool: &MySqlPool) -> Result<(), sqlx::Error> {
+        sqlx::query!(
+            "DELETE FROM users WHERE phone_number = ?",
+            self.phone_number
+        )
+        .execute(pool)
+        .await?;
+        Ok(())
+    }
 }
 impl Recipient {
-    pub fn new(phone_number: String, update_time: NaiveTime) -> Recipient {
+    pub fn new(
+        phone_number: String,
+        update_time: NaiveTime,
+        days: Option<Vec<Day>>,
+        lines: Option<Vec<Line>>,
+    ) -> Recipient {
         Recipient {
             user: User::new(phone_number.clone(), update_time),
-            days: DaysDB::new(phone_number.clone()),
-            lines: LinesDB::new(phone_number.clone()),
+            days: DaysDB::new(phone_number.clone(), days),
+            lines: LinesDB::new(phone_number.clone(), lines),
         }
     }
     pub async fn insert_into_db(&self, pool: &MySqlPool) -> Result<(), sqlx::Error> {
-        let (user,) = tokio::join!(self.user.insert_into_db(pool));
-        user?;
+        self.user.insert_into_db(pool).await?;
 
         let (days, lines) = tokio::join!(
             self.days.insert_into_db(pool),
@@ -155,110 +296,69 @@ impl Recipient {
         lines?;
         Ok(())
     }
-}
-async fn create_tabels(conn: &MySqlPool) {
-    let users = sqlx::query!(
-        r#"
-        CREATE TABLE IF NOT EXISTS users (
-            phone_number BIGINT NOT NULL UNIQUE,
-            update_time TIME NOT NULL,
-            CONSTRAINT pk_user PRIMARY KEY (phone_number)
-        )
-        "#,
-    )
-    .execute(conn);
+    pub async fn fetch(phone_number: String, pool: &MySqlPool) -> Result<Recipient, sqlx::Error> {
+        let user = User::fetch(phone_number.clone(), pool).await?;
+        let (days, lines) = tokio::join!(
+            DaysDB::fetch(&user.phone_number, pool),
+            LinesDB::fetch(&user.phone_number, pool)
+        );
 
-    let days = sqlx::query!(
-        r#"
-        CREATE TABLE IF NOT EXISTS days (
-            phone_number BIGINT NOT NULL UNIQUE,
-            Monday BOOLEAN NOT NULL DEFAULT FALSE,
-            Tuesday BOOLEAN NOT NULL DEFAULT FALSE,
-            Wednesday BOOLEAN NOT NULL DEFAULT FALSE,
-            Thursday BOOLEAN NOT NULL DEFAULT FALSE, 
-            Friday BOOLEAN NOT NULL DEFAULT FALSE,
-            Saturday BOOLEAN NOT NULL DEFAULT FALSE,
-            Sunday BOOLEAN NOT NULL DEFAULT FALSE,
-            CONSTRAINT fk_days FOREIGN KEY (phone_number) REFERENCES users(phone_number)
-        )
-        "#,
-    )
-    .execute(conn);
-
-    let lines = sqlx::query!(
-        r#"
-        CREATE TABLE IF NOT EXISTS tube_lines (
-            phone_number BIGINT NOT NULL UNIQUE,
-            Elizabeth BOOLEAN NOT NULL DEFAULT FALSE,
-            Jubilee BOOLEAN NOT NULL DEFAULT FALSE,
-            Bakerloo BOOLEAN NOT NULL DEFAULT FALSE,
-            Central BOOLEAN NOT NULL DEFAULT FALSE,
-            Circle BOOLEAN NOT NULL DEFAULT FALSE,
-            District BOOLEAN NOT NULL DEFAULT FALSE,
-            DLR BOOLEAN NOT NULL DEFAULT FALSE,
-            Hammersmith BOOLEAN NOT NULL DEFAULT FALSE,
-            Metropolitan BOOLEAN NOT NULL DEFAULT FALSE,
-            Northern BOOLEAN NOT NULL DEFAULT FALSE,
-            Piccadilly BOOLEAN NOT NULL DEFAULT FALSE,
-            Victoria BOOLEAN NOT NULL DEFAULT FALSE,
-            Waterloo BOOLEAN NOT NULL DEFAULT FALSE,
-            Overground BOOLEAN NOT NULL DEFAULT FALSE, 
-            Tram BOOLEAN NOT NULL DEFAULT FALSE,
-            CONSTRAINT fk_lines FOREIGN KEY (phone_number) REFERENCES users(phone_number)
-        )
-        "#,
-    )
-    .execute(conn);
-
-    let (r_1, r_2, r_3) = tokio::join!(users, days, lines);
-    r_1.expect("Failed to create users table");
-    r_2.expect("Failed to create days table");
-    r_3.expect("Failed to create lines table");
+        return Ok(Recipient {
+            user: User::new(user.phone_number, user.update_time),
+            days: days?,
+            lines: lines?,
+        });
+    }
+    pub async fn remove_from_db(&self, pool: &MySqlPool) -> Result<(), sqlx::Error> {
+        let (res_lines, res_days) = tokio::join!(
+            self.lines.remove_from_db(pool),
+            self.days.remove_from_db(pool)
+        );
+        res_lines?;
+        res_days?;
+        self.user.remove_from_db(pool).await?;
+        Ok(())
+    }
 }
 #[cfg(test)]
 mod dbtests {
     use super::*;
     use dotenv::dotenv;
 
-    #[tokio::test]
-    async fn crate_tabel_test() {
-        dotenv().ok();
-        let pool = MySqlPool::connect(&std::env::var("DATABASE_URL").unwrap())
-            .await
-            .unwrap();
-        create_tabels(&pool).await;
-    }
-
+    /// Tetst to check that a person can be inserted into the db.
     #[tokio::test]
     async fn user_test() {
         dotenv().ok();
+        // Define the recip
         let mut recipient = Recipient::new(
-            String::from("0712345671"),
+            String::from("test"),
             NaiveTime::from_hms_opt(8, 0, 0).unwrap(),
+            None,
+            None,
         );
+
         let pool = MySqlPool::connect(&std::env::var("DATABASE_URL").unwrap())
             .await
             .unwrap();
-        recipient.days.set_day(String::from("Monday"), true);
+        // Make sure there is not old version from crashed tests.
+        match recipient.remove_from_db(&pool).await {
+            Ok(_) => (),
+            Err(_) => (),
+        }
+        recipient.days.set_day(Day::Monday, true);
         recipient.lines.set_line(Line::Jubilee, true);
-        sqlx::query!(
-            "insert into users (phone_number, update_time) values ('1', ?)",
-            NaiveTime::from_hms_opt(8, 0, 0).unwrap(),
-        )
-        .execute(&pool)
-        .await
-        .expect("failed to do the test");
-        sqlx::query!("insert into days (phone_number) values ('1')",)
-            .execute(&pool)
-            .await
-            .expect("failed to do the test");
-        sqlx::query!("update days set Monday = TRUE where phone_number = '1'",)
-            .execute(&pool)
-            .await
-            .expect("failed to do the test");
         recipient
             .insert_into_db(&pool)
             .await
             .expect("failed to insert recitp");
+        let fetched_recipient = Recipient::fetch(recipient.user.phone_number.clone(), &pool)
+            .await
+            .expect("failed to fetch status");
+        // Tidy up table.
+        recipient
+            .remove_from_db(&pool)
+            .await
+            .expect("failed to remove Recipient");
+        assert_eq!(fetched_recipient, recipient);
     }
 }

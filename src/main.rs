@@ -2,6 +2,7 @@ mod sms;
 mod tfl_status;
 mod tube;
 mod userdb;
+use chrono::NaiveTime;
 
 #[tokio::main]
 async fn main() {
@@ -30,6 +31,12 @@ async fn main() {
     // 3) Interface with messenger, and request handeling.
     //
     //
+    userdb::Recipient::new(
+        "test".into(),
+        NaiveTime::from_hms_opt(1, 2, 0).unwrap(),
+        None,
+        None,
+    );
 }
 #[cfg(test)]
 mod test {
