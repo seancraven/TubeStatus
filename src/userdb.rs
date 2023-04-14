@@ -2,11 +2,12 @@
 // The interface is all defined by a recipient.
 // These contain phone number, update time, days and tube lines, to be updated on.
 use crate::tube::Line;
-use chrono::NaiveTime;
+use chrono::{Datelike, Local, NaiveTime};
+use dotenv::dotenv;
 use sqlx::mysql::MySqlPool;
 use std::collections::HashMap;
 
-#[derive(Debug, Eq, PartialEq, Hash, Clone)]
+#[derive(Debug, Eq, PartialEq, Hash, Clone, Copy)]
 pub enum Day {
     Monday,
     Tuesday,
@@ -26,6 +27,18 @@ impl Day {
             Day::Friday => String::from("Friday"),
             Day::Saturday => String::from("Saturday"),
             Day::Sunday => String::from("Sunday"),
+        }
+    }
+    pub fn current_day() -> Day {
+        let day = Local::now().weekday();
+        match day {
+            chrono::Weekday::Mon => Day::Monday,
+            chrono::Weekday::Tue => Day::Tuesday,
+            chrono::Weekday::Wed => Day::Wednesday,
+            chrono::Weekday::Thu => Day::Thursday,
+            chrono::Weekday::Fri => Day::Friday,
+            chrono::Weekday::Sat => Day::Saturday,
+            chrono::Weekday::Sun => Day::Sunday,
         }
     }
 }
@@ -232,6 +245,9 @@ impl DaysDB {
             .await?;
         Ok(())
     }
+    fn set_day(&mut self, day: Day, to_update: bool) {
+        self.map.insert(day, to_update);
+    }
 }
 impl User {
     fn new(phone_number: String, update_time: NaiveTime) -> User {
@@ -319,6 +335,62 @@ impl Recipient {
         self.user.remove_from_db(pool).await?;
         Ok(())
     }
+    fn get_line(&self, line: Line) -> Option<&bool> {
+        self.lines.map.get(&line)
+    }
+    fn get_day(&self, day: Day) -> Option<&bool> {
+        self.days.map.get(&day)
+    }
+    pub fn get_number(&self) -> String {
+        self.user.phone_number.clone()
+    }
+    pub fn get_lines(&self) -> Vec<Line> {
+        let mut lines = Vec::new();
+        for (line, report) in &self.lines.map {
+            if *report {
+                lines.push(*line);
+            };
+        }
+        return lines;
+    }
+    /// Return a vector of days for which the Recipient wants to recieve.
+    pub fn get_days(&self) -> Vec<Day> {
+        let mut days = Vec::new();
+        for (day, report) in &self.days.map {
+            if *report {
+                days.push(*day);
+            };
+        }
+        return days;
+    }
+}
+/// Returns a vector of recipients, with their days and lines.
+pub async fn recipients_to_update(
+    pool: &MySqlPool,
+    min_time: &NaiveTime,
+    max_time: &NaiveTime,
+) -> Result<Option<Vec<Recipient>>, sqlx::Error> {
+    let mut recipients = Vec::new();
+    let query = sqlx::query!(
+        "SELECT (phone_number) FROM users WHERE update_time >= ? AND update_time <= ?",
+        min_time,
+        max_time
+    )
+    .fetch_all(pool)
+    .await?;
+    for row in query {
+        let recipient = Recipient::fetch(row.phone_number, pool).await?;
+        recipients.push(recipient);
+    }
+    if recipients.len() == 0 {
+        return Ok(None);
+    }
+    return Ok(Some(recipients));
+}
+pub async fn create_pool() -> Result<MySqlPool, sqlx::Error> {
+    dotenv().ok();
+    let pool = MySqlPool::connect(&std::env::var("DATABASE_URL").unwrap()).await?;
+    return Ok(pool);
 }
 #[cfg(test)]
 mod dbtests {

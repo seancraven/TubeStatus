@@ -6,13 +6,16 @@ use twilio::{Client, OutboundMessage, TwilioError};
 ///  # Arguments
 ///     ## authorized_recipient: a phone number which
 ///     ## message_content: the message to be sent.
-pub async fn message(authorized_recipient: &str, message_content: &str) -> Result<(), TwilioError> {
+pub async fn message(
+    authorized_recipient: String,
+    message_content: String,
+) -> Result<(), TwilioError> {
     // I don't like that both of these functions load from the same .env file. might be okay.
     dotenv().ok();
     let from = env::var("PHONE_FROM").expect("Expected a phone number to send from");
     let client = get_twilio_client();
     // Might want to move client out, depending on if other functions need it.
-    let msg = OutboundMessage::new(&from, authorized_recipient, message_content);
+    let msg = OutboundMessage::new(&from, &authorized_recipient, &message_content);
     client.send_message(msg).await?;
     Ok(())
 }

@@ -39,8 +39,8 @@ impl Lines {
     /// Populates the map with this information.
     ///
     /// The implementaion is slow and simple, uses a private hashmap.
-    pub fn update(&mut self) {
-        if let Ok(status_vec) = tfl_status::fetch() {
+    pub async fn update(&mut self) {
+        if let Ok(status_vec) = tfl_status::fetch().await {
             for line_status in status_vec.iter() {
                 self.map.insert(line_status.name, line_status.clone());
             }

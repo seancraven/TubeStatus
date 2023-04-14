@@ -3,16 +3,19 @@
 //
 //
 use crate::tube;
-use reqwest::{blocking, Error};
+use reqwest::Error;
 /// Fucntion to fetch the satus of tfl lines.
 ///
 /// The function uses a sequential webscraper, to fetch
 /// tlfs page and deduces important info from it.
-pub fn fetch() -> Result<Vec<tube::LineStatus>, Error> {
+pub async fn fetch() -> Result<Vec<tube::LineStatus>, Error> {
     //
-    let request = blocking::get("https://tfl.gov.uk/tube-dlr-overground/status/")
-        .expect("Failed to get tfl status page");
-    let html = request.text()?;
+    let client = reqwest::Client::new();
+    let request = client
+        .get("https://tfl.gov.uk/tube-dlr-overground/status/")
+        .send()
+        .await?;
+    let html = request.text().await?;
     let imp_lines = important_lines(&html);
     let tag_blocks = split_by_li_tag(imp_lines);
     let mut line_statuses: Vec<tube::LineStatus> = Vec::new();
@@ -136,22 +139,22 @@ impl<'html> LiTag<'html> {
 #[cfg(test)]
 mod tests {
     use crate::tfl_status;
-    #[test]
-    fn tube_scraped() {
-        match tfl_status::fetch() {
+    #[tokio::test]
+    async fn tube_scraped() {
+        match tfl_status::fetch().await {
             Ok(_) => assert!(true),
             Err(_) => assert!(false),
         };
     }
-    #[test]
-    fn all_lines() {
-        let lines = tfl_status::fetch().expect("Failed");
+    #[tokio::test]
+    async fn all_lines() {
+        let lines = tfl_status::fetch().await.expect("Failed");
         assert_eq!(lines.len(), 15);
     }
-    #[test]
-    fn status_on_all_lines() {
+    #[tokio::test]
+    async fn status_on_all_lines() {
         // use cargo test -- --nocapture to see the output.
-        let lines = tfl_status::fetch().expect("Failed");
+        let lines = tfl_status::fetch().await.expect("Failed");
         for line in lines.iter() {
             // All lines have a short description.
             println!("line: {:?}", line.name);
