@@ -1,3 +1,5 @@
+/// Script to create the database tables.
+/// This only needs to be run once.
 use dotenv::dotenv;
 use std::env;
 #[tokio::main]

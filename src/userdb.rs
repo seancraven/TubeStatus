@@ -8,6 +8,8 @@ use sqlx::mysql::MySqlPool;
 use std::collections::HashMap;
 
 #[derive(Debug, Eq, PartialEq, Hash, Clone, Copy)]
+/// Enum to represent the days of the week.
+/// This is used to store the days the user wants to be notified about.
 pub enum Day {
     Monday,
     Tuesday,
@@ -43,8 +45,14 @@ impl Day {
     }
 }
 
-/// A user in the database.
-/// The phone number is the primary key and the fk, for the other info.
+/// The public class that mirriors the database schema.
+/// This is used to interact with the database.
+///
+///
+/// # Example
+/// ```
+///  let recipient = Recipient::fetch("07912345678", &pool).await;
+///'''
 ///
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub struct Recipient {
@@ -59,7 +67,7 @@ struct User {
 }
 #[derive(Debug, Eq, PartialEq, Clone)]
 struct DaysDB {
-    /// Which days the user wants to be notified about.
+    /// which days the user wants to be notified about.
     phone_number: String,
     map: HashMap<Day, bool>,
 }
@@ -301,6 +309,7 @@ impl Recipient {
             lines: LinesDB::new(phone_number.clone(), lines),
         }
     }
+    /// Inserts a constructed recipient into the database.
     pub async fn insert_into_db(&self, pool: &MySqlPool) -> Result<(), sqlx::Error> {
         self.user.insert_into_db(pool).await?;
 
@@ -312,6 +321,8 @@ impl Recipient {
         lines?;
         Ok(())
     }
+    /// Fetches a recipient from the database.
+    /// Returns a Recipient struct.
     pub async fn fetch(phone_number: String, pool: &MySqlPool) -> Result<Recipient, sqlx::Error> {
         let user = User::fetch(phone_number.clone(), pool).await?;
         let (days, lines) = tokio::join!(
@@ -325,6 +336,7 @@ impl Recipient {
             lines: lines?,
         });
     }
+    /// Removes a self from the database.
     pub async fn remove_from_db(&self, pool: &MySqlPool) -> Result<(), sqlx::Error> {
         let (res_lines, res_days) = tokio::join!(
             self.lines.remove_from_db(pool),
@@ -341,9 +353,13 @@ impl Recipient {
     fn get_day(&self, day: Day) -> Option<&bool> {
         self.days.map.get(&day)
     }
+    /// Utility fucntion to get Recipients phone number.
     pub fn get_number(&self) -> String {
         self.user.phone_number.clone()
     }
+    /// Utility function to get Recipients update lines.
+    /// Only returns the lines that are true in the database.
+    /// These are the lines that the Recipient wants to get updates on.
     pub fn get_lines(&self) -> Vec<Line> {
         let mut lines = Vec::new();
         for (line, report) in &self.lines.map {
@@ -353,7 +369,9 @@ impl Recipient {
         }
         return lines;
     }
-    /// Return a vector of days for which the Recipient wants to recieve.
+    /// Utility function to get Recipients update days.
+    /// Only returns the days that are true in the database.
+    /// These are the days that the Recipient wants to get updates on.
     pub fn get_days(&self) -> Vec<Day> {
         let mut days = Vec::new();
         for (day, report) in &self.days.map {
@@ -364,7 +382,8 @@ impl Recipient {
         return days;
     }
 }
-/// Returns a vector of recipients, with their days and lines.
+/// Returns a vector of Recipients from the database,
+/// that have an update time between min_time and max_time.
 pub async fn recipients_to_update(
     pool: &MySqlPool,
     min_time: &NaiveTime,
@@ -387,6 +406,7 @@ pub async fn recipients_to_update(
     }
     return Ok(Some(recipients));
 }
+/// Utility function to create a pool for the database.
 pub async fn create_pool() -> Result<MySqlPool, sqlx::Error> {
     dotenv().ok();
     let pool = MySqlPool::connect(&std::env::var("DATABASE_URL").unwrap()).await?;

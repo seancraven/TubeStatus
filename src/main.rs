@@ -10,31 +10,8 @@ use userdb::Day;
 
 #[tokio::main]
 async fn main() {
-    // fn main() {
-    // Basic idea:
-    // store a small local database of users, who each have a list
-    // of associated lines and time for a message,
-    // User requests to use the service by sending tubepotato a message/email
-    // they are then registered with the service. With there preferences
-    // On the time checks that the user requests the tube status is sent to their
-    // phone number.
-    //
-    //
-    // Components of this idea;
-    // 1) webscraper for the tfl website. I assume that this will be the most brittle
-    // part.
-    // The classes are well delimited.
-
-    // 2) User database, write and read users.
-    //  rough schema
-    //  users: a, b ,c
-    //  each user has own table,
-    //  User a:
-    //  request time,
-    //  lines,
-    // 3) Interface with messenger, and request handeling.
-    //
-    //
+    // Start off the infinite loop.
+    // This is really bad, There are cases where the loop misses updates.
     let mut current_time = Local::now().naive_local().time();
     let mut next_hour: chrono::NaiveTime;
     let pool = userdb::create_pool()
@@ -56,7 +33,10 @@ async fn main() {
         // Perfom webscrape. to get data.
         let mut line_status = Lines::new();
         line_status.update().await;
+        // Container for the async message sending.
         let mut message_futures = JoinSet::new();
+
+        // Iterate through the recipients, and send them a message.
         for rec in recipients.into_iter() {
             //
             let mut message_body = String::from("Hi,\n Line status updates:\n");
