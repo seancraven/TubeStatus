@@ -1,9 +1,10 @@
 /// Script to create the database tables.
 /// This only needs to be run once.
 use dotenv::dotenv;
+use sqlx::MySqlPool;
 use std::env;
-#[tokio::main]
-fn main() {
+
+pub async fn build_tables() {
     dotenv().ok();
     let pool = MySqlPool::connect(&env::var("DATABASE_URL").expect("Expected to get database url"))
         .await
